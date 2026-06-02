@@ -1,6 +1,10 @@
 import os
 import torch
 from torch import nn, optim
+import torch.ao.quantization
+
+import copy
+from torchao.quantization import quantize_, Int8DynamicActivationInt8WeightConfig
 
 from data.CifarData import getCifarDataLoaders
 from data.DigitsData import getDigitsDataLoaders
@@ -55,6 +59,29 @@ def train_regressor(model, train_loader, model_name, epochs=150):
             print(f"Epoch [{epoch+1}/{epochs}], Loss: {avg_loss:.4f}")
 
 
+def quantize_dynamic_model(model, type=torch.qint8, output_path=None):
+    # 1. Przełączenie modelu w tryb ewaluacji (bardzo ważne dla warstw typu Dropout czy BatchNorm)
+    model.eval()
+
+    print("Rozpoczęcie kwantyzacji dynamicznej obiektu modelu...")
+    
+    # 2. Wykonanie kwantyzacji dynamicznej
+    # Konwertuje warstwy Linear i rekurencyjne na format INT8 (qint8)
+    quantized_model = torch.ao.quantization.quantize_dynamic(
+        model,
+        qconfig_spec={torch.nn.Linear, torch.nn.LSTM, torch.nn.GRU},
+        dtype=type
+    )
+    
+    print("Kwantyzacja zakończona sukcesem!")
+
+    # 3. Opcjonalny zapis na dysk
+    if output_path:
+        torch.save(quantized_model.state_dict(), output_path)
+        print(f"Skwantyzowane wagi zostały zapisane w: {output_path}")
+        
+    return quantized_model
+
 def train_models():
     # 1. Load Data
     print("Loading datasets...")
@@ -70,19 +97,15 @@ def train_models():
     big_mlp = MLPbig()
     regressor = Regressor()
     
-    train_classifier(small_mlp, wine_train_loader, "Wine MLP (Small)", epochs=10)
-    train_classifier(big_mlp, digits_train_loader, "Digits MLP (Big)", epochs=5)
-    train_classifier(cnn, cnn_train_loader, "CIFAR-10 CNN", epochs=5)
-    train_regressor(regressor, regressor_loader, "Trigonometric Regressor", epochs=200)
+    models = [(small_mlp, wine_train_loader, "Wine MLP (Small)"), (cnn, cnn_train_loader, "CIFAR-10 CNN"), (regressor, regressor_loader, "Trigonometric Regressor"), (big_mlp, digits_train_loader, "Digits MLP (Big)")]
+    quant_types = [torch.qint8, torch.float16]
     
-    save_dir = "saved_models"
-    os.makedirs(save_dir, exist_ok=True)
+    for m in models:
+        train_classifier(m[0], m[1], m[2], epochs = 5)
+        torch.save(m[0].state_dict(), f"saved_models/{m[2]}.pth")
+        for q in quant_types:
+            quantize_dynamic_model(m[0], q, f"saved_models/{m[2]}_quantized.pth")   
 
-    torch.save(small_mlp.state_dict(), f"{save_dir}/wine_mlp.pth")
-    torch.save(big_mlp.state_dict(), f"{save_dir}/digits_mlp.pth")
-    torch.save(cnn.state_dict(), f"{save_dir}/cifar_cnn.pth")
-    torch.save(regressor.state_dict(), f"{save_dir}/trig_regressor.pth")
     
 
-if __name__ == "__main__":
-    train_models()
+train_models()
