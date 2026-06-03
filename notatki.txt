@@ -1,12 +1,17 @@
 pakiet obliczeniowy: pytorch
 
 kroki do wykonania:
-1. wybrać 3-4 architektury sieci
-2. wybrać zbiór (zbiory) danych
 3. napisać skrypt testujący różne stopnie / rodzaje kwantyzacji każdej architektury
     - zbiera informacje o różnych metrykach
     - zbiera informacje o zaoszczędzonej pamięci
+w tym skrypcie ma być też:
+    - QAT - quantization aware training - żeby przetestować wyniki takiej kwantyzacji
+    - nowe api dla CNN, bo podobno quantize_dynamic jest słabe do CNN
+    - PTQ - post training static quantization
+    - stosunek accuracy/mse do rozmiaru
+    - pomiary czasu (ile trwa przejście po sieci)
 4. napisać sprawozdanie opisujące i podsumowujące wyniki
+
 
 
 
@@ -21,3 +26,5 @@ kroki do wykonania:
     - dla większego klasyfikatora Handwritten digits
     - dla CNN CIFAR-10
     - dla regresji samodzielnie wygenerowane dane
+
+
