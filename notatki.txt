@@ -4,10 +4,6 @@ kroki do wykonania:
 3. napisać skrypt testujący różne stopnie / rodzaje kwantyzacji każdej architektury
     - zbiera informacje o różnych metrykach
     - zbiera informacje o zaoszczędzonej pamięci
-w tym skrypcie ma być też:
-    - QAT - quantization aware training - żeby przetestować wyniki takiej kwantyzacji
-    - nowe api dla CNN, bo podobno quantize_dynamic jest słabe do CNN
-    - PTQ - post training static quantization
     - stosunek accuracy/mse do rozmiaru
     - pomiary czasu (ile trwa przejście po sieci)
 4. napisać sprawozdanie opisujące i podsumowujące wyniki
@@ -28,3 +24,10 @@ w tym skrypcie ma być też:
     - dla regresji samodzielnie wygenerowane dane
 
 
+
+
+na następne:
+1. przygotować min. 80% projektu
+2. pokazać innym osobom wyniki - jakaś prosta czytelna prezentacja, żeby można było pokazać
+3. sprawozdanie
+może uda się cały dokończyć na piątek

@@ -1,6 +1,10 @@
+import os
 import torch
 from torch import nn, optim
 import torch.ao.quantization
+from torch.ao.quantization import quantize_dynamic
+#na linuxie mozna odkomentowac
+#from torchao.quantization import quantize_, int8_dynamic_activation_int8_weight, int4_weight_only
 
 from data.CifarData import getCifarDataLoaders
 from data.DigitsData import getDigitsDataLoaders
@@ -13,13 +17,23 @@ from models.MLPsmall import MLPsmall
 from models.Regressor import Regressor
 
 
-def train_classifier(model, train_loader, model_name, epochs=5):
-    print(f"\nStarting Training for: {model_name}")
+
+def train_model(model, train_loader, model_name, is_classifier=True, quantization=None, is_dynamic=True, quantization_level="f16", epochs=10, save_dir="./saved_models"):
+    print(f"\n========== Training of model {model_name} started ==========")
     
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    os.makedirs(save_dir, exist_ok=True)
+    
     model.train()
-    
+    criterion = nn.CrossEntropyLoss() if is_classifier else nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001) if is_classifier else optim.Adam(model.parameters(), lr=0.01)
+
+    if quantization == "qat":
+        print("QAT preparation")
+        torch.backends.quantized.engine = 'fbgemm' #dla linux: 'qnnpack'
+        model.qconfig = torch.ao.quantization.get_default_qat_qconfig('fbgemm') #dla linux: 'qnnpack'
+        torch.ao.quantization.prepare_qat(model, inplace=True)
+
+    #training
     for epoch in range(epochs):
         total_loss = 0.0
         for X_batch, y_batch in train_loader:
@@ -29,98 +43,117 @@ def train_classifier(model, train_loader, model_name, epochs=5):
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
+        
         avg_loss = total_loss / len(train_loader)
         print(f"Epoch [{epoch+1}/{epochs}], Loss: {avg_loss:.4f}")
 
+    if quantization == "qat":
+        print("conversion of QAT model to INT8...")
+        model.eval()
+        torch.ao.quantization.convert(model, inplace=True)
+        file_suffix = "qat_int8"
+    # PTQ
+    else:
+        model.eval() 
+        if quantization == "ptq":
+            if quantization_level == "f16":
+                print("conversion to Float16")
+                model.half()
+                file_suffix = "ptq_f16"
+                
+            elif quantization_level == "i8":
+                if is_dynamic:
+                    print("PTQ INT8 dynamic")
+                    #wersja 1
+                    #quantize_(model, int8_dynamic_activation_int8_weight())   #mi na windowsie nie dziala :(
+                    #file_suffix = "ptq_dynamic_i8"
+                    #wersja 2
+                    model = quantize_dynamic(
+                        model,
+                        qconfig_spec={nn.Linear, nn.LSTM, nn.GRU},
+                        dtype=torch.qint8
+                    )
+                    file_suffix = "ptq_dynamic_i8"
+                else:
+                    print("PTQ INT8 static")
+                    torch.backends.quantized.engine = 'fbgemm' #dla linux: 'qnnpack'
+                    model.qconfig = torch.ao.quantization.get_default_qconfig('fbgemm') #dla linux: 'qnnpack'
+                    torch.ao.quantization.prepare(model, inplace=True)
+                    
+                    print("calibration for static PTQ")
+                    with torch.no_grad():
+                        for i, (X_batch, _) in enumerate(train_loader):
+                            model(X_batch)
+                            if i > 50: break 
+                            
+                    torch.ao.quantization.convert(model, inplace=True)
+                    file_suffix = "ptq_static_i8"
+                    
+            elif quantization_level == "i4":
+                #na linuxie mozna odkomentowac
+                #print("PTQ INT4 Weight-Only")
+                #quantize_(model, int4_weight_only())
+                #file_suffix = "ptq_i4"
+                pass
+        else:
+            file_suffix = "baseline_fp32"
 
-def train_regressor(model, train_loader, model_name, epochs=150):
-    print(f"\nStarting Training for: {model_name}")
-    
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    save_path = os.path.join(save_dir, f"{model_name}_{file_suffix}.pth")
+    torch.save(model.state_dict(), save_path)
+    print(f"model saved in: {save_path}")
 
-    model.train()
-    
-    for epoch in range(epochs):
-        total_loss = 0.0
-        for X_batch, y_batch in train_loader:
-            optimizer.zero_grad()
-            predictions = model(X_batch)
-            loss = criterion(predictions, y_batch)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-        if (epoch + 1) % 25 == 0:
-            avg_loss = total_loss / len(train_loader)
-            print(f"Epoch [{epoch+1}/{epochs}], Loss: {avg_loss:.4f}")
-
-
-def quantize_dynamic_model(model, type=torch.qint8, output_path=None):
-    #tryb ewaluacji
-    model.eval()
-
-    print("Rozpoczęcie kwantyzacji dynamicznej obiektu modelu...")
-    
-    quantized_model = torch.ao.quantization.quantize_dynamic(
-        model,
-        qconfig_spec={torch.nn.Linear, torch.nn.LSTM, torch.nn.GRU},
-        dtype=type
-    )
-    print("Kwantyzacja zakończona sukcesem!")
-    if output_path:
-        torch.save(quantized_model.state_dict(), output_path)
-        print(f"Skwantyzowane wagi zostały zapisane w: {output_path}")
-        
-    return quantized_model
-
+    return model
 
 
 
 def train_models():
+
     # 1. Load Data
     print("Loading datasets...")
     cnn_train_loader, cnn_test_loader = getCifarDataLoaders()
     wine_train_loader, wine_test_loader = getWineDataLoaders()
     digits_train_loader, digits_test_loader = getDigitsDataLoaders()
     regressor_loader = getRegressionDataLoader()
-
-    # 2. Instantiate Models
-    print("Initializing models...")
-    cnn = CNN()
-    small_mlp = MLPsmall()
-    big_mlp = MLPbig()
-    regressor = Regressor()
-    
-    # 3. Define models
-    models = [
-        (small_mlp, wine_train_loader, "Wine_MLP_(Small)", "classification"), 
-        (cnn, cnn_train_loader, "CIFAR-10_CNN", "classification"), 
-        (regressor, regressor_loader, "Trigonometric_Regressor", "regression"), 
-        (big_mlp, digits_train_loader, "Digits_MLP_(Big)", "classification")
-    ]
-    
-    # Define quantization types
-    quant_types = [
-        (torch.qint8, "qint8"), 
-        (torch.float16, "float16")
-    ]
-    
-    # 4. Training and Quantization Loop
-    for model, loader, name, task in models:
-        if task == "regression":
-            train_regressor(model, loader, name, epochs=150)
-        else:
-            train_classifier(model, loader, name, epochs=5)
-
-        #Float32 model
-        torch.save(model.state_dict(), f"saved_models/{name}_original_fp32.pth")
         
-        #quantize and save
-        for q_type, q_name in quant_types:
-            quantize_dynamic_model(
-                model, 
-                type=q_type, 
-                output_path=f"saved_models/{name}_quantized_{q_name}.pth"
+    models_setup = [
+        (MLPsmall, wine_train_loader, "Wine_MLP_(Small)", True), 
+        (CNN, cnn_train_loader, "CIFAR-10_CNN", True), 
+        (Regressor, regressor_loader, "Trigonometric_Regressor", False), 
+        (MLPbig, digits_train_loader, "Digits_MLP_(Big)", True)
+    ]
+
+    #(quantization, is_dynamic, level)
+    quant_variants = [
+        (None, None, None),     # no quantization
+        ("qat", None, None),    # QAT only to INT8
+        ("ptq", None, "f16"),   # PTQ to f16
+        ("ptq", True, "i8"),    # PTQ to INT8 with dynamic quantization
+        ("ptq", False, "i8"),   # PTQ to INT8 with static quantization
+        #na linuxie mozna odkomentowac
+        #("ptq", None, "i4"),    # PTQ to INT4 is weights-only
+    ]
+
+    for setup in models_setup:
+        ModelClass, loader, name, is_cls = setup
+        for variant in quant_variants:
+            qtz, dyn, lvl = variant
+            fresh_model = ModelClass()
+            if ModelClass == Regressor:
+                epochs = 150
+            else:
+                epochs = 10
+            train_model(
+                model=fresh_model, 
+                train_loader=loader, 
+                model_name=name, 
+                is_classifier=is_cls, 
+                quantization=qtz, 
+                is_dynamic=dyn, 
+                quantization_level=lvl, 
+                epochs=epochs
             )
+
+
+
 
 train_models()
