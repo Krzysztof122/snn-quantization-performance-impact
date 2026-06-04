@@ -16,6 +16,8 @@ from models.MLPbig import MLPbig
 from models.MLPsmall import MLPsmall
 from models.Regressor import Regressor
 
+from sklearn.metrics import precision_score, recall_score, f1_score
+
 
 
 def train_model(model, train_loader, model_name, is_classifier=True, quantization=None, is_dynamic=True, quantization_level="f16", epochs=10, save_dir="./saved_models"):
@@ -105,6 +107,10 @@ def train_model(model, train_loader, model_name, is_classifier=True, quantizatio
     return model
     
 
+import torch
+import torch.nn as nn
+from sklearn.metrics import precision_score, recall_score, f1_score
+
 def test_model(model, test_loader, model_name, is_classifier=True, quantization=None, quantization_level="f16"):
     print(f"\n========== Testing of model {model_name} started ==========")
     
@@ -118,6 +124,10 @@ def test_model(model, test_loader, model_name, is_classifier=True, quantization=
     total_loss = 0.0
     correct = 0
     total = 0
+    
+    # Listy do przechowywania wszystkich etykiet i przewidywań (potrzebne do scikit-learn)
+    all_preds = []
+    all_targets = []
     
     with torch.no_grad():
         for X_batch, y_batch in test_loader:
@@ -133,13 +143,29 @@ def test_model(model, test_loader, model_name, is_classifier=True, quantization=
                 total += y_batch.size(0)
                 correct += (predicted == y_batch).sum().item()
                 
+                # Konwersja na CPU i numpy, a następnie dodanie do list zbiorczych
+                all_preds.extend(predicted.cpu().numpy())
+                all_targets.extend(y_batch.cpu().numpy())
+                
     avg_loss = total_loss / len(test_loader)
     print(f"Test Loss: {avg_loss:.4f}")
     
     if is_classifier:
         accuracy = 100 * correct / total
+        
+        # Obliczanie metryk za pomocą scikit-learn
+        # zero_division=0 zapobiega błędom/ostrzeżeniom, gdy jakaś klasa nie została ani razu przewidziana
+        precision = precision_score(all_targets, all_preds, average='macro', zero_division=0)
+        recall = recall_score(all_targets, all_preds, average='macro', zero_division=0)
+        f1 = f1_score(all_targets, all_preds, average='macro', zero_division=0)
+        
         print(f"Test Accuracy: {accuracy:.2f}%")
-        return avg_loss, accuracy
+        print(f"Test Precision (macro): {precision:.4f}")
+        print(f"Test Recall (macro): {recall:.4f}")
+        print(f"Test F1 Score (macro): {f1:.4f}")
+        
+        # Zwracamy poszerzony zestaw metryk dla klasyfikatora
+        return avg_loss, accuracy, precision, recall, f1
     else:
         return avg_loss
 
