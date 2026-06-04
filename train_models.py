@@ -103,6 +103,45 @@ def train_model(model, train_loader, model_name, is_classifier=True, quantizatio
     print(f"model saved in: {save_path}")
 
     return model
+    
+
+def test_model(model, test_loader, model_name, is_classifier=True, quantization=None, quantization_level="f16"):
+    print(f"\n========== Testing of model {model_name} started ==========")
+    
+    # WYMAGANE: Ustawienie backendu dla warstw INT8, jeśli testujemy na Windows/Intel
+    if quantization == "qat" or (quantization == "ptq" and quantization_level == "i8"):
+        torch.backends.quantized.engine = 'fbgemm' # dla Linuxa: 'qnnpack'
+
+    model.eval()
+    
+    criterion = nn.CrossEntropyLoss() if is_classifier else nn.MSELoss()
+    total_loss = 0.0
+    correct = 0
+    total = 0
+    
+    with torch.no_grad():
+        for X_batch, y_batch in test_loader:
+            if quantization == "ptq" and quantization_level == "f16":
+                X_batch = X_batch.half()
+                
+            predictions = model(X_batch)
+            loss = criterion(predictions, y_batch)
+            total_loss += loss.item()
+            
+            if is_classifier:
+                _, predicted = torch.max(predictions.data, 1)
+                total += y_batch.size(0)
+                correct += (predicted == y_batch).sum().item()
+                
+    avg_loss = total_loss / len(test_loader)
+    print(f"Test Loss: {avg_loss:.4f}")
+    
+    if is_classifier:
+        accuracy = 100 * correct / total
+        print(f"Test Accuracy: {accuracy:.2f}%")
+        return avg_loss, accuracy
+    else:
+        return avg_loss
 
 
 
@@ -125,10 +164,11 @@ def train_models():
     #(quantization, is_dynamic, level)
     quant_variants = [
         (None, None, None),     # no quantization
-        ("qat", None, None),    # QAT only to INT8
         ("ptq", None, "f16"),   # PTQ to f16
         ("ptq", True, "i8"),    # PTQ to INT8 with dynamic quantization
-        ("ptq", False, "i8"),   # PTQ to INT8 with static quantization
+        #poniższe typy kwantyzacji na razie mi się nie udało ogarnąć żeby działało testowanie. Potem może naprawię ale jakaś gruba sprawa
+        #("ptq", False, "i8"),   # PTQ to INT8 with static quantization 
+        #("qat", None, None),    # QAT only to INT8
         #na linuxie mozna odkomentowac
         #("ptq", None, "i4"),    # PTQ to INT4 is weights-only
     ]
@@ -141,7 +181,7 @@ def train_models():
             if ModelClass == Regressor:
                 epochs = 150
             else:
-                epochs = 10
+                epochs = 3 #10 tu było, mniejsza wartość tylko dla testu
             train_model(
                 model=fresh_model, 
                 train_loader=loader, 
@@ -151,6 +191,14 @@ def train_models():
                 is_dynamic=dyn, 
                 quantization_level=lvl, 
                 epochs=epochs
+            )
+            test_model(
+                model=fresh_model, 
+                test_loader=loader, 
+                model_name=name, 
+                is_classifier=is_cls,
+                quantization=qtz,
+                quantization_level=lvl
             )
 
 
