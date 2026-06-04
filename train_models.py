@@ -16,7 +16,7 @@ from models.MLPbig import MLPbig
 from models.MLPsmall import MLPsmall
 from models.Regressor import Regressor
 
-from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 
 
 
@@ -105,11 +105,6 @@ def train_model(model, train_loader, model_name, is_classifier=True, quantizatio
     print(f"model saved in: {save_path}")
 
     return model
-    
-
-import torch
-import torch.nn as nn
-from sklearn.metrics import precision_score, recall_score, f1_score
 
 def test_model(model, test_loader, model_name, is_classifier=True, quantization=None, quantization_level="f16"):
     print(f"\n========== Testing of model {model_name} started ==========")
@@ -140,8 +135,6 @@ def test_model(model, test_loader, model_name, is_classifier=True, quantization=
             
             if is_classifier:
                 _, predicted = torch.max(predictions.data, 1)
-                total += y_batch.size(0)
-                correct += (predicted == y_batch).sum().item()
                 
                 # Konwersja na CPU i numpy, a następnie dodanie do list zbiorczych
                 all_preds.extend(predicted.cpu().numpy())
@@ -151,15 +144,15 @@ def test_model(model, test_loader, model_name, is_classifier=True, quantization=
     print(f"Test Loss: {avg_loss:.4f}")
     
     if is_classifier:
-        accuracy = 100 * correct / total
         
         # Obliczanie metryk za pomocą scikit-learn
         # zero_division=0 zapobiega błędom/ostrzeżeniom, gdy jakaś klasa nie została ani razu przewidziana
+        accuracy = accuracy_score(all_targets, all_preds)
         precision = precision_score(all_targets, all_preds, average='macro', zero_division=0)
         recall = recall_score(all_targets, all_preds, average='macro', zero_division=0)
         f1 = f1_score(all_targets, all_preds, average='macro', zero_division=0)
         
-        print(f"Test Accuracy: {accuracy:.2f}%")
+        print(f"Test Accuracy: {accuracy:.4f}")
         print(f"Test Precision (macro): {precision:.4f}")
         print(f"Test Recall (macro): {recall:.4f}")
         print(f"Test F1 Score (macro): {f1:.4f}")
