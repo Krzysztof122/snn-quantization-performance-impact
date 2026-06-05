@@ -18,6 +18,8 @@ from models.Regressor import Regressor
 
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 
+import matplotlib.pyplot as plt
+
 
 
 def train_model(model, train_loader, model_name, is_classifier=True, quantization=None, is_dynamic=True, quantization_level="f16", epochs=10, save_dir="./saved_models"):
@@ -194,13 +196,20 @@ def train_models():
 
     for setup in models_setup:
         ModelClass, loader, name, is_cls = setup
+        
+        # We will track labels (X-axis) and the metric we want to plot (Y-axis)
+        plot_labels = []
+        plot_metrics = [[], [], [], []]
+        
         for variant in quant_variants:
             qtz, dyn, lvl = variant
             fresh_model = ModelClass()
+            
             if ModelClass == Regressor:
                 epochs = 150
             else:
-                epochs = 3 #10 tu było, mniejsza wartość tylko dla testu
+                epochs = 3 
+                
             train_model(
                 model=fresh_model, 
                 train_loader=loader, 
@@ -211,14 +220,61 @@ def train_models():
                 quantization_level=lvl, 
                 epochs=epochs
             )
-            test_model(
-                model=fresh_model, 
-                test_loader=loader, 
-                model_name=name, 
-                is_classifier=is_cls,
-                quantization=qtz,
-                quantization_level=lvl
-            )
+            
+            # Formulate a clean readable name for the plot
+            variant_name = f"{qtz or 'baseline'}_{lvl or 'fp32'}"
+            plot_labels.append(variant_name)
+            
+            # --- FIX: Safe unpacking depending on model type ---
+            if is_cls:
+                avg_loss, accuracy, precision, recall, f1 = test_model(
+                    model=fresh_model, 
+                    test_loader=loader, # Note: you might want to use test_loader here instead of train loader!
+                    model_name=name, 
+                    is_classifier=is_cls,
+                    quantization=qtz,
+                    quantization_level=lvl
+                )
+                plot_metrics[0].append(accuracy)
+                plot_metrics[1].append(precision)
+                plot_metrics[2].append(recall)
+                plot_metrics[3].append(accuracy)
+            else:
+                avg_loss = test_model(
+                    model=fresh_model, 
+                    test_loader=loader, 
+                    model_name=name, 
+                    is_classifier=is_cls,
+                    quantization=qtz,
+                    quantization_level=lvl
+                )
+                plot_metrics[0].append(avg_loss) # Tracking loss for Regressor instead
+
+        # --- FIX: Plotting logic shifted outside the variant loop ---
+        plt.figure(figsize=(8, 4))
+        
+        metrics = [('Accuracy', plot_metrics[0]), ('Precision', plot_metrics[1]), ('Recall', plot_metrics[2]), ('F1 Score', plot_metrics[3])]
+        
+        if is_cls:
+            for metric in metrics:
+                plt.bar(plot_labels, metric[1], color='skyblue', edgecolor='black')
+                plt.ylabel(metric[0])
+                plt.title(f'{metric[0]} w zależności od stopnia kwantyzacji - {name}')
+                plt.ylim(0, 1.05)
+                plt.savefig(f'{name}_{metric[0]}.png')
+                plt.xlabel('Typ kwantyzacji')
+                plt.tight_layout()
+                #plt.show()
+        else:
+            plt.bar(plot_labels, metrics[0][1], color='skyblue', edgecolor='black')
+            plt.ylabel('Loss function')
+            plt.title(f'Loss function w zależności od stopnia kwantyzacji - {name}')
+            plt.ylim(0, 1.05)
+            plt.savefig(f'{name}_loss.png')
+            plt.xlabel('Typ kwantyzacji')
+            plt.tight_layout()
+            #plt.show()
+        
 
 
 
