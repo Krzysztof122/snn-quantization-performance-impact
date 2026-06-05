@@ -208,7 +208,7 @@ def train_models():
             if ModelClass == Regressor:
                 epochs = 150
             else:
-                epochs = 3 
+                epochs = 10 
                 
             train_model(
                 model=fresh_model, 
