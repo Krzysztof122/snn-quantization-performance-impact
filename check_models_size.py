@@ -23,25 +23,41 @@ def check_models_size(sciezka_folderu: str = "./saved_models"):
     print(f"Znaleziono {len(pliki_pth)} plików .pth w folderze '{sciezka_folderu}':")
     print("=" * 60)
     
-    sizes = []
-
-    for plik in pliki_pth:
-        sciezka_pliku = os.path.join(sciezka_folderu, plik)
-        print(f"\nModel: {plik}")
+    
+    
+    model_names = [
+        "Wine_MLP_(Small)",
+        "CIFAR-10_CNN",
+        "Trigonometric_Regressor",
+        "Digits_MLP_(Big)"
+    ]
+    
+    file_groups = [[plik for plik in pliki_pth if model_name in plik] for model_name in model_names]
+    sizes = [[], [], [], []]
+    
+    i = 0
+    for group in file_groups:
+        for plik in group:
+            sciezka_pliku = os.path.join(sciezka_folderu, plik)
+            print(f"\nModel: {plik}")
         
-        # 1. Rozmiar na dysku
-        rozmiar_bajty = os.path.getsize(sciezka_pliku)
-        rozmiar_mb = rozmiar_bajty / (1024 * 1024)
-        print(f"   Rozmiar na dysku: {rozmiar_mb:.4f} MB")
-        sizes.append(rozmiar_mb)
-            
+            # 1. Rozmiar na dysku
+            rozmiar_bajty = os.path.getsize(sciezka_pliku)
+            rozmiar_mb = rozmiar_bajty / (1024 * 1024)
+            print(f"   Rozmiar na dysku: {rozmiar_mb:.4f} MB")
+            sizes[i].append(rozmiar_mb)
+        i += 1
+    
+    i = 0
     print("\n" + "=" * 60 + "\nSkonczone!")
-    plt.bar(pliki_pth, sizes, color='salmon', edgecolor='black')
-    plt.xticks(rotation=90)
-    plt.ylabel('Rozmiar w MB')
-    plt.title('Rozmiary modelu w różnych stopniach kwantyzacji')
-    plt.savefig('sizes.png')
-    plt.show()
+    for group in file_groups:
+        plt.bar(group, sizes[i], color='salmon', edgecolor='black')
+        plt.xticks(rotation=90)
+        plt.ylabel('Rozmiar w MB')
+        plt.title('Rozmiary modelu w różnych stopniach kwantyzacji')
+        plt.savefig(f'sizes_{model_names[i]}.png')
+        plt.show()
+        i += 1
 
 
 check_models_size("./saved_models")
