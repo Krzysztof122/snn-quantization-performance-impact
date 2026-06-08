@@ -251,12 +251,13 @@ def train_models():
                 plot_metrics[0].append(avg_loss) # Tracking loss for Regressor instead
 
         # --- FIX: Plotting logic shifted outside the variant loop ---
-        plt.figure(figsize=(8, 4))
+        
         
         metrics = [('Accuracy', plot_metrics[0]), ('Precision', plot_metrics[1]), ('Recall', plot_metrics[2]), ('F1 Score', plot_metrics[3])]
         
         if is_cls:
             for metric in metrics:
+                plt.figure(figsize=(8, 4))
                 plt.bar(plot_labels, metric[1], color='skyblue', edgecolor='black')
                 plt.ylabel(metric[0])
                 plt.title(f'{metric[0]} w zależności od stopnia kwantyzacji - {name}')
@@ -266,10 +267,11 @@ def train_models():
                 plt.tight_layout()
                 #plt.show()
         else:
+            plt.figure(figsize=(8, 4))
             plt.bar(plot_labels, metrics[0][1], color='skyblue', edgecolor='black')
             plt.ylabel('Loss function')
             plt.title(f'Loss function w zależności od stopnia kwantyzacji - {name}')
-            plt.ylim(0, 1.05)
+            plt.ylim(0, 2)
             plt.savefig(f'{name}_loss.png')
             plt.xlabel('Typ kwantyzacji')
             plt.tight_layout()
