@@ -69,7 +69,7 @@ def train_model(model, train_loader, model_name, is_classifier=True, quantizatio
                 if is_dynamic:
                     print("PTQ INT8 dynamic")
                     #wersja 1
-                    #quantize_(model, int8_dynamic_activation_int8_weight())   #mi na windowsie nie dziala :(
+                    #quantize_(model, int8_dynamic_activation_int8_weight())   #mi na windowsie nie dziala
                     #file_suffix = "ptq_dynamic_i8"
                     #wersja 2
                     model = quantize_dynamic(
@@ -111,7 +111,7 @@ def train_model(model, train_loader, model_name, is_classifier=True, quantizatio
 def test_model(model, test_loader, model_name, is_classifier=True, quantization=None, quantization_level="f16"):
     print(f"\n========== Testing of model {model_name} started ==========")
     
-    # WYMAGANE: Ustawienie backendu dla warstw INT8, jeśli testujemy na Windows/Intel
+    # Ustawienie backendu dla warstw INT8, jeśli testujemy na Windows/Intel
     if quantization == "qat" or (quantization == "ptq" and quantization_level == "i8"):
         torch.backends.quantized.engine = 'fbgemm' # dla Linuxa: 'qnnpack'
 
@@ -122,7 +122,7 @@ def test_model(model, test_loader, model_name, is_classifier=True, quantization=
     correct = 0
     total = 0
     
-    # Listy do przechowywania wszystkich etykiet i przewidywań (potrzebne do scikit-learn)
+    # Listy do przechowywania wszystkich etykiet i przewidywań
     all_preds = []
     all_targets = []
     
@@ -187,7 +187,6 @@ def train_models():
         (None, None, None),     # no quantization
         ("ptq", None, "f16"),   # PTQ to f16
         ("ptq", True, "i8"),    # PTQ to INT8 with dynamic quantization
-        #poniższe typy kwantyzacji na razie mi się nie udało ogarnąć żeby działało testowanie. Potem może naprawię ale jakaś gruba sprawa
         #("ptq", False, "i8"),   # PTQ to INT8 with static quantization 
         #("qat", None, None),    # QAT only to INT8
         #na linuxie mozna odkomentowac
@@ -197,7 +196,6 @@ def train_models():
     for setup in models_setup:
         ModelClass, loader, name, is_cls = setup
         
-        # We will track labels (X-axis) and the metric we want to plot (Y-axis)
         plot_labels = []
         plot_metrics = [[], [], [], []]
         
@@ -221,15 +219,12 @@ def train_models():
                 epochs=epochs
             )
             
-            # Formulate a clean readable name for the plot
             variant_name = f"{qtz or 'baseline'}_{lvl or 'fp32'}"
             plot_labels.append(variant_name)
-            
-            # --- FIX: Safe unpacking depending on model type ---
             if is_cls:
                 avg_loss, accuracy, precision, recall, f1 = test_model(
                     model=fresh_model, 
-                    test_loader=loader, # Note: you might want to use test_loader here instead of train loader!
+                    test_loader=loader,
                     model_name=name, 
                     is_classifier=is_cls,
                     quantization=qtz,
@@ -248,11 +243,8 @@ def train_models():
                     quantization=qtz,
                     quantization_level=lvl
                 )
-                plot_metrics[0].append(avg_loss) # Tracking loss for Regressor instead
-
-        # --- FIX: Plotting logic shifted outside the variant loop ---
-        
-        
+                plot_metrics[0].append(avg_loss)
+   
         metrics = [('Accuracy', plot_metrics[0]), ('Precision', plot_metrics[1]), ('Recall', plot_metrics[2]), ('F1 Score', plot_metrics[3])]
         
         if is_cls:
@@ -277,8 +269,5 @@ def train_models():
             plt.tight_layout()
             #plt.show()
         
-
-
-
 
 train_models()

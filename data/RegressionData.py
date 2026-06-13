@@ -34,7 +34,7 @@ if __name__ == "__main__":
     plt.figure(figsize=(10, 5))
     plt.scatter(all_X.numpy(), all_y.numpy(), s=15, alpha=0.6, label='Noisy DataLoader Points')
     plt.plot(X_sorted.numpy(), y_true.numpy(), color='red', linewidth=2, label='True Mathematical Function')
-    plt.title("Regression Dataset (Stress Test)")
+    plt.title("Regression Dataset")
     plt.xlabel("X")
     plt.ylabel("y")
     plt.legend()
